@@ -1,0 +1,72 @@
+// backend/prisma/schema.prisma
+
+// Define the database provider (MySQL)
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// Define the client generator (Prisma Client JS)
+generator client {
+  provider = "prisma-client-js"
+}
+
+// --- CORE MODELS ---
+
+// 1. User Model (for Authentication)
+model User {
+  id          Int            @id @default(autoincrement())
+  email       String         @unique
+  password    String         // Stored as hashed value (bcrypt)
+  username    String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  
+  // Relationship: A user can have many items in their watchlist/library
+  watchListItems WatchlistItem[]
+}
+
+// 2. Movie Model (The core data)
+model Movie {
+  id          Int            @id @default(autoincrement())
+  title       String
+  genre       String?
+  year        Int?
+  plot        String?
+  posterUrl   String?
+  
+  // Relationship: A movie can be in many users' watchlists
+  watchListItems WatchlistItem[]
+}
+
+// 3. WatchlistItem Model (The Join Table - Tracks user lists and rating)
+// This model allows a Many-to-Many relationship with extra data (status, rating)
+model WatchlistItem {
+  id          Int        @id @default(autoincrement())
+  
+  // Fields for the relationship
+  userId      Int
+  movieId     Int
+  
+  // Fields for tracking status and rating
+  status      WatchStatus @default(TO_WATCH) // Enum: TO_WATCH or WATCHED
+  rating      Int?        @db.TinyInt      // 1-5 stars, nullable
+  review      String?     @db.Text         // Optional short review
+  
+  createdAt   DateTime   @default(now())
+  
+  // Define relationships
+  user        User       @relation(fields: [userId], references: [id])
+  movie       Movie      @relation(fields: [movieId], references: [id])
+  
+  // Constraint: A user can only have one status/rating for a specific movie
+  @@unique([userId, movieId])
+}
+
+// --- ENUMS ---
+
+// Defines the possible statuses for a movie in a user's list
+enum WatchStatus {
+  TO_WATCH
+  WATCHED
+}
