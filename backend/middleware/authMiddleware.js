@@ -1,33 +1,29 @@
-// backend/middleware/authMiddleware.js
+// backend/middleware/auth.js
 
 const jwt = require('jsonwebtoken');
-// Import the prisma client created in server.js
-const prisma = require('../prismaClient'); 
-// Middleware to protect routes and identify the user
-const authMiddleware = async (req, res, next) => {
+const prisma = require('../prismaClient'); // Prisma client
+
+// Middleware to authenticate user
+const auth = async (req, res, next) => {
     let token;
 
-    // Check for token in the Authorization header (Bearer Token format)
     if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
         try {
-            // Get token from header (removes 'Bearer ' prefix)
             token = req.headers.authorization.split(' ')[1];
 
-            // Verify token
             const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-            // Find user in DB and attach to the request object, EXCLUDING the password
-            // This is key for personalized data (CLO4)
+            // Fetch user from DB including role
             req.user = await prisma.user.findUnique({
                 where: { id: decoded.userId },
-                select: { id: true, email: true, username: true } // Select specific fields
+                select: { id: true, email: true, username: true, role: true } // include role
             });
 
             if (!req.user) {
                 return res.status(401).json({ message: 'Not authorized, user not found' });
             }
 
-            next(); // Proceed to the controller
+            next(); // proceed
         } catch (error) {
             console.error(error);
             return res.status(401).json({ message: 'Not authorized, token failed' });
@@ -39,4 +35,17 @@ const authMiddleware = async (req, res, next) => {
     }
 };
 
-module.exports = authMiddleware;
+// Middleware to allow only admin users
+const adminOnly = (req, res, next) => {
+    if (!req.user) {
+        return res.status(401).json({ message: 'Not authorized' });
+    }
+
+    if (req.user.role !== 'admin') {
+        return res.status(403).json({ message: 'Access denied. Admins only.' });
+    }
+
+    next();
+};
+
+module.exports = { auth, adminOnly };
